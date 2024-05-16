@@ -1,0 +1,12 @@
+name: simpleflux
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - conda
+  - lmfit
+  - numpy
+  - pandas
+  - pytest
+  - python
+  - scipy
