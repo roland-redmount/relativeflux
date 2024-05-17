@@ -1,10 +1,8 @@
 from collections import defaultdict
-
-import numpy
-
-from simpleflux.model import FluxModel, FluxState, Experiment, ModelState
-from pytest import fixture
 import numpy as np
+from simpleflux.model import FluxModel, FluxState
+from simpleflux.modelstate import ModelState
+from pytest import fixture
 
 
 TEST_STOICHIOMETRY = defaultdict(int, {
@@ -21,10 +19,10 @@ TEST_STOICHIOMETRY = defaultdict(int, {
     ('AKB_OUT', 'akb'): -1,
 })
 TEST_REVERSIBLE = [
-    'MET_IN',
-    'PROT_SYNTH',
     'AHCY',
     'CYSTL',
+    'MET_IN',
+    'PROT_SYNTH',
 ]
 TEST_FREE_REACTIONS = ['CYSTS', 'METS', 'PROT_OUT', 'SAM_METH']
 
@@ -52,13 +50,13 @@ def example_flux_state_2(example_model):
     return FluxState.from_dict(
         model=example_model,
         free_fluxes={
-            'CYSTS' : 1.0,
+            'CYSTS': 1.0,
             'METS': 1.0,
             'SAM_METH': 2.0,
             'PROT_OUT': 3.0,
         },
         exchanges={
-            'MET_IN' : 0.0,
+            'MET_IN': 0.0,
             'PROT_SYNTH': 0.0,
             'AHCY': 0.0,
             'CYSTL': 0.0,
@@ -67,10 +65,22 @@ def example_flux_state_2(example_model):
 
 
 @fixture
-def example_experiment(example_model):
-    return Experiment(
+def example_model_state_1(example_model, example_flux_state_1):
+    return ModelState(
         model=example_model,
-        medium_mi={'MET_IN' : 0.99}
+        flux_state=example_flux_state_1,
+        concentrations=[1000, 30, 10, 500, 12_000, 15, 65],
+        medium_mi={'MET_IN': 0.99}
+    )
+
+
+@fixture
+def example_model_state_2(example_model, example_flux_state_2):
+    return ModelState(
+        model=example_model,
+        flux_state=example_flux_state_2,
+        concentrations=[1000, 30, 10, 500, 12_000, 15, 65],
+        medium_mi={'MET_IN': 0.99}
     )
 
 
@@ -100,7 +110,10 @@ def test_stoichiometry(example_model):
     assert example_model.reversible_index == [0, 2, 7, 9]
     assert example_model.free_index == [3, 6, 8, 10]
     assert example_model.dep_index == [0, 1, 2, 4, 5, 7, 9]
-    assert example_model.get_exchange_names() == ['AHCY_EX', 'CYSTL_EX', 'MET_IN_EX', 'PROT_SYNTH_EX']
+    assert list(example_model.exchange_names())\
+           == ['AHCY_EX', 'CYSTL_EX', 'MET_IN_EX', 'PROT_SYNTH_EX']
+    assert list(example_model.reversible_reactions()) == TEST_REVERSIBLE
+    assert list(example_model.free_reactions()) == TEST_FREE_REACTIONS
 
 
 def test_flux_state_1(example_model, example_flux_state_1):
@@ -132,37 +145,24 @@ def test_flux_state_2(example_model, example_flux_state_2):
     assert example_model.is_balanced(example_flux_state_2.net_fluxes)
 
 
-def test_experiment(example_experiment):
-    assert (example_experiment.medium_influx_mi == [0, 0, 0, 0, 0, 0, 0, 0.99, 0, 0, 0]).all()
-
-
-def test_simulate_1(example_experiment, example_flux_state_1):
-    concentrations = [1000, 30, 10, 500, 12_000, 15, 65]
+def test_model_state_1(example_model_state_1):
+    assert (example_model_state_1.medium_influx_mi == [0, 0, 0, 0, 0, 0, 0, 0.99, 0, 0, 0]).all()
     time_points = np.arange(0, 3, 0.5)
-    simulated_mi = example_experiment.simulate(
-        state=ModelState(
-            flux_state=example_flux_state_1,
-            concentrations=concentrations
-        ),
+    simulated_mi = example_model_state_1.simulate(
         time_points=time_points
     )
-    assert simulated_mi.shape == (len(time_points), len(example_experiment.model.metabolites))
+    assert simulated_mi.shape == (len(time_points), len(example_model_state_1.model.metabolites))
     assert np.allclose(simulated_mi[0], 0)
     assert (simulated_mi >= 0).all()
     assert (simulated_mi <= 1).all()
 
 
-def test_simulate_2(example_experiment, example_flux_state_2):
-    concentrations = [1000, 30, 10, 500, 12_000, 15, 65]
+def test_model_state_2(example_model_state_2):
     time_points = np.arange(0, 3, 0.5)
-    simulated_mi = example_experiment.simulate(
-        state=ModelState(
-            flux_state=example_flux_state_2,
-            concentrations=concentrations
-        ),
+    simulated_mi = example_model_state_2.simulate(
         time_points=time_points
     )
-    assert simulated_mi.shape == (len(time_points), len(example_experiment.model.metabolites))
+    assert simulated_mi.shape == (len(time_points), len(example_model_state_2.model.metabolites))
     assert np.allclose(simulated_mi[0], 0)
     assert (simulated_mi >= 0).all()
     assert (simulated_mi <= 1).all()
