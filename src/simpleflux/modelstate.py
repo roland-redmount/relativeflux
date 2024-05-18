@@ -83,6 +83,7 @@ class ModelState:
             t=time_points_with_zero,
         )
         # remove zero datapoint from result
+
         return simulated_mi_with_zero[1:, :]
 
     def simulate_to_pandas(self, time_points: np.array) -> pd.DataFrame:
@@ -92,30 +93,3 @@ class ModelState:
             index=time_points
         )
 
-    LOWER_FLUX_BOUND = 0.1
-    MAX_CONC_RATIO = 10
-
-    def to_parameters(self, flux_bound=1000) -> Parameters:
-        parameters = Parameters()
-        for i, reaction in zip(self.model.free_index, self.model.free_reactions()):
-            parameters.add(
-                reaction,
-                value=self.flux_state.net_fluxes[i],
-                min=(-flux_bound if self.model.is_reversible(reaction) else self.LOWER_FLUX_BOUND),
-                max=flux_bound
-            )
-        for i, name in zip(self.model.reversible_index, self.model.exchange_names()):
-            parameters.add(
-                name,
-                value=self.flux_state.exchanges[i],
-                min=0,
-                max=1.
-            )
-        for i, name in enumerate(self.model.metabolites):
-            parameters.add(
-                name,
-                value=self.concentrations[i],
-                min=self.concentrations[i] / self.MAX_CONC_RATIO,
-                max=self.concentrations[i] * self.MAX_CONC_RATIO
-            )
-        return parameters

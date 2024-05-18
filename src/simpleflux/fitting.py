@@ -6,7 +6,25 @@ from simpleflux.model import FluxState
 from simpleflux.modelstate import ModelState
 
 
+# barrier function to be used for for constraining to positive fluxes,
+# not used now. Barrier does not strictly prevent evaluating the objective
+# at negative fluxes, inlt makes it less likely
+def barrier_function(x: np.array, epsilon: float, a: float, b: float) -> float:
+    """
+    A smooth function f(x) such that f(epsilon) = a > f(0) = b
+    and f(x) is linear for x < 0 with f'(x) = f'(b)
+    """
+    if x > 0:
+        return np.power(b/a, 1 - x/epsilon).sum()
+    else:
+        return b + a * np.log(b/a) * x
+
+
 class ModelFit:
+
+    LOWER_FLUX_BOUND = 0.01
+    MAX_CONC_RATIO = 10
+    MAX_EXCHANGE_BOUND = 0.999
 
     model_state: ModelState
 
@@ -80,8 +98,12 @@ class ModelFit:
         )
 
     def update_and_compute_residual(self, parameters: Parameters) -> np.array:
-        self.update_state(parameters)
-        return self.model_residual()
+        try:
+            self.update_state(parameters)
+            return self.model_residual()
+        except ValueError:
+            print(parameters)
+            raise
 
     def model_residual(self) -> np.array:
         return np.concatenate([
@@ -101,10 +123,36 @@ class ModelFit:
     def pool_size_residual(self) -> np.array:
         return (self.pool_sizes_measured - self.model_state.concentrations) / self.pool_sizes_std_dev
 
+    @classmethod
+    def state_to_parameters(cls, state: ModelState, flux_bound=1000) -> Parameters:
+        parameters = Parameters()
+        for i, reaction in enumerate(state.model.free_reactions()):
+            parameters.add(
+                name=reaction,
+                value=state.flux_state.free_fluxes[i],
+                min=(-flux_bound if state.model.is_reversible(reaction) else cls.LOWER_FLUX_BOUND),
+                max=flux_bound
+            )
+        for i, exchange_name in enumerate(state.model.exchange_names()):
+            parameters.add(
+                name=exchange_name,
+                value=state.flux_state.exchanges[i],
+                min=0,
+                max=cls.MAX_EXCHANGE_BOUND
+            )
+        for i, exchange_name in enumerate(state.model.metabolites):
+            parameters.add(
+                exchange_name,
+                value=state.concentrations[i],
+                min=state.concentrations[i] / cls.MAX_CONC_RATIO,
+                max=state.concentrations[i] * cls.MAX_CONC_RATIO
+            )
+        return parameters
+
     def fit(self) -> MinimizerResult:
         # here minimize calls userfcn(params, *args, **kws)
         minimizer = Minimizer(
             userfcn=self.update_and_compute_residual,
-            params=self.model_state.to_parameters(),
+            params=self.state_to_parameters(self.model_state),
         )
         return minimizer.minimize(method='leastsq')

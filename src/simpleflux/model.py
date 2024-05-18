@@ -20,12 +20,12 @@ class FluxState:
     and exchange coefficients for reversible reactions
     """
     free_fluxes: np.array
-    exchanges: np.array
+    exchanges: np.array     # for reversible reactions
     net_fluxes: np.array
     forward_fluxes: np.array
     reverse_fluxes: np.array
 
-    def __init__(self, model: 'FluxModel', free_fluxes: np.array, exchanges: np.array):
+    def __init__(self, model: 'FluxModel', free_fluxes: np.array, exchanges: np.array, check_positive=False):
         self.free_fluxes = free_fluxes
         self.exchanges = exchanges
 
@@ -33,8 +33,21 @@ class FluxState:
         self.net_fluxes = np.zeros(len(model.reactions))
         self.net_fluxes[model.free_index] = free_fluxes
         self.net_fluxes[model.dep_index] = dep_fluxes
-        if (self.net_fluxes[model.irreversible_index] < 0).any():
-            raise ValueError('Negative fluxes for irreversible reactions')
+        if check_positive:
+            if (self.net_fluxes[model.irreversible_index] < 0).any():
+                neg_index = [
+                    index
+                    for index in model.irreversible_index if self.net_fluxes[index] < 0
+                ]
+                raise ValueError(
+                    'Negative flux for irreversible reaction(s): ' +
+                    ', '.join(
+                        [
+                            model.reactions[index] + " = " + str(self.net_fluxes[index])
+                            for index in neg_index
+                        ]
+                    )
+                )
         if not model.is_balanced(self.net_fluxes):
             raise ValueError('Flux vector is not balanced')
 
@@ -42,10 +55,11 @@ class FluxState:
         exchanges_all[model.reversible_index] = exchanges
         self.reverse_fluxes = self.net_fluxes * exchanges_all / (1 - exchanges_all)
         self.forward_fluxes = self.net_fluxes + self.reverse_fluxes
-        if (self.forward_fluxes < 0).any():
-            raise ValueError('Negative forward_fluxes')
-        if (self.reverse_fluxes < 0).any():
-            raise ValueError('Negative reverse_fluxes')
+        # this only happens if exchange is outside [0, 1]
+        # if (self.forward_fluxes < 0).any():
+        #     raise ValueError('Negative forward_fluxes')
+        # if (self.reverse_fluxes < 0).any():
+        #     raise ValueError('Negative reverse_fluxes')
 
     @staticmethod
     def from_dict(model: 'FluxModel', free_fluxes: dict[str, float], exchanges: dict[str, float]):

@@ -1,5 +1,9 @@
 from collections import defaultdict
+from pprint import pprint
+
 import numpy as np
+
+from simpleflux.fitting import ModelFit
 from simpleflux.model import FluxModel, FluxState
 from simpleflux.modelstate import ModelState
 from pytest import fixture
@@ -166,3 +170,7 @@ def test_model_state_2(example_model_state_2):
     assert np.allclose(simulated_mi[0], 0)
     assert (simulated_mi >= 0).all()
     assert (simulated_mi <= 1).all()
+
+
+def test_parameters(example_model_state_1):
+    pprint(ModelFit.state_to_parameters(example_model_state_1))
