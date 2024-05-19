@@ -69,6 +69,8 @@ class FluxState:
             exchanges=[exchanges[model.reactions[i]] for i in model.reversible_index]
         )
 
+    # TODO: we should have a from_pandas methods as well
+
 
 class FluxModel:
     # we might want to turn these into numpy arrays for faster indexing
@@ -82,6 +84,7 @@ class FluxModel:
     stoch_matrix: np.array
     stoch_pos: np.array
     stoch_neg: np.array
+    dep_flux_matrix: np.array
 
     # the flux model now also includes the free flux parametrization, that may be too much
     def __init__(self, stoichiometry: dict, reversible_reactions: list[str], free_reactions: list[str]):

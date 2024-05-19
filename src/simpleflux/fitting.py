@@ -160,10 +160,28 @@ class ModelFit:
             )
         return parameters
 
-    def fit(self) -> MinimizerResult:
+    def fit(self) -> None:
         # here minimize calls userfcn(params, *args, **kws)
         minimizer = Minimizer(
             userfcn=self.update_and_compute_residual,
             params=self.state_to_parameters(self.model_state),
         )
-        return minimizer.minimize(method='leastsq')
+        self.minimizer_result = minimizer.minimize(method='leastsq')
+
+    def _dep_flux_cov(self, free_flux_cov: np.array) -> np.array:
+        # project covariance matrix for X onto Y = AX as Cov(Y) = A Cov(X) A^t
+        return (
+            self.model_state.model.dep_flux_matrix @ free_flux_cov @
+            self.model_state.model.dep_flux_matrix.T
+        )
+
+    def fitted_fluxes_std_err(self) -> np.array:
+        n_reactions = len(self.model_state.model.reactions)
+        n_free_fluxes = len(self.model_state.model.free_index)
+        # NOTE: this assumes the free fluxes are placed first
+        free_flux_cov = self.minimizer_result.covar[:n_free_fluxes, :n_free_fluxes]
+        dep_flux_cov = self._dep_flux_cov(free_flux_cov)
+        net_flux_std_err = np.zeros(n_reactions)
+        net_flux_std_err[self.model_state.model.free_index] = np.sqrt(free_flux_cov.diagonal())
+        net_flux_std_err[self.model_state.model.dep_index] = np.sqrt(dep_flux_cov.diagonal())
+        return net_flux_std_err
