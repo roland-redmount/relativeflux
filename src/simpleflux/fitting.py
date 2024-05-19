@@ -20,6 +20,9 @@ def barrier_function(x: np.array, epsilon: float, a: float, b: float) -> float:
         return b + a * np.log(b/a) * x
 
 
+def _list_index(x: list, y: list):
+    return [x.index(t) for t in y]
+
 class ModelFit:
 
     LOWER_FLUX_BOUND = 0.01
@@ -38,37 +41,44 @@ class ModelFit:
     flux_index_to_fit: list
     pool_sizes_measured: np.array
     pool_sizes_std_dev: np.array
+    conc_index_to_fit: list
+
+    minimizer_result: MinimizerResult
 
     def __init__(self, initial_state: ModelState,
                  measured_mi: pd.DataFrame, measured_mi_std_dev: pd.DataFrame,
-                 measured_flux: pd.DataFrame, measured_flux_std_dev: pd.DataFrame,
-                 measured_conc: np.array, measured_conc_std_dev: np.array):
+                 measured_fluxes: pd.DataFrame,
+                 measured_conc: pd.DataFrame):
         """
         :param initial_state: initial model state
         :param measured_mi: a data frame index by time points and
         with measured metabolites in columns
-        :param measured_flux: a data frame indexed by reactions
+        :param measured_fluxes: a data frame indexed by reactions
         :param measured_conc:
         """
         self.model_state = initial_state
         self.t_measured = measured_mi.index.to_numpy()
 
-        self.x_index_to_fit = [
-            self.model_state.model.metabolites.index(metabolite)
-            for metabolite in measured_mi.columns
-        ]
+        self.x_index_to_fit = _list_index(
+            self.model_state.model.metabolites,
+            measured_mi.columns
+        )
         self.x_measured = measured_mi.to_numpy()
         self.x_std_dev = measured_mi_std_dev.to_numpy()
 
-        self.flux_index_to_fit = [
-            self.model_state.model.reactions.index(reaction)
-            for reaction in measured_flux.index
-        ]
-        self.flux_measured = measured_flux.to_numpy()
-        self.flux_std_dev = measured_flux_std_dev.to_numpy()
-        # currently we must specify measurements for all pool sizes
-        self.pool_sizes_measured = measured_conc
-        self.pool_sizes_std_dev = measured_conc_std_dev
+        self.flux_index_to_fit = _list_index(
+            self.model_state.model.reactions,
+            measured_fluxes.index
+        )
+        self.flux_measured = measured_fluxes['mean'].to_numpy()
+        self.flux_std_dev = measured_fluxes['std_dev'].to_numpy()
+
+        self.conc_index_to_fit = _list_index(
+            self.model_state.model.metabolites,
+            measured_conc.index
+        )
+        self.pool_sizes_measured = measured_conc['mean'].to_numpy()
+        self.pool_sizes_std_dev = measured_conc['std_dev'].to_numpy()
 
     def _parameters_to_flux(self, parameters: Parameters) -> FluxState:
         free_fluxes = np.array([
@@ -121,7 +131,8 @@ class ModelFit:
         return (self.flux_measured - current_fluxes) / self.flux_std_dev
 
     def pool_size_residual(self) -> np.array:
-        return (self.pool_sizes_measured - self.model_state.concentrations) / self.pool_sizes_std_dev
+        current_pool_size = self.model_state.concentrations[self.conc_index_to_fit]
+        return (self.pool_sizes_measured - current_pool_size) / self.pool_sizes_std_dev
 
     @classmethod
     def state_to_parameters(cls, state: ModelState, flux_bound=1000) -> Parameters:
