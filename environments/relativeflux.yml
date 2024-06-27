@@ -1,4 +1,4 @@
-name: simpleflux
+name: relativeflux
 channels:
   - defaults
   - conda-forge
