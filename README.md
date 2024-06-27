@@ -1,3 +1,3 @@
-# Simpleflux
+# Relativeflux
 
-This is a python package for nonstationary metabolic flux analysis, in the "simple" case where only a single isotopomer is present. Metabolic systems that lack condensation/cleavage reactions can be analyzed with this package.
+This is a python package for nonstationary relative metabolic flux analysis. This treats the case where only a single isotopomer is present, and where the metabolic network contains only linear or branched pathways, and no cycles.
